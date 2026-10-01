@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Attendance Tracker</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --warning: #f59e0b;
+            --bg: #f3f4f6;
+            --card: #ffffff;
+            --text: #1f2937;
+            --border: #e5e7eb;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        header h1 { color: var(--primary); font-size: 2.5rem; }
+        header p { color: #6b7280; }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border);
+        }
+
+        .card h2 {
+            margin-bottom: 20px;
+            color: var(--primary);
+            border-bottom: 2px solid var(--bg);
+            padding-bottom: 10px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        input, select {
+            padding: 10px 15px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 1rem;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
+
+        .student-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .student-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: transform 0.2s;
+        }
+
+        .student-card.marked-present { border-left: 5px solid var(--success); background: #f0fdf4; }
+        .student-card.marked-absent { border-left: 5px solid var(--danger); background: #fef2f2; }
+        .student-card.marked-late { border-left: 5px solid var(--warning); background: #fffbeb; }
+
+        .student-info { font-weight: 600; font-size: 1.1rem; }
+        .student-id { font-size: 0.85rem; color: #6b7280; }
+
+        .action-buttons { display: flex; gap: 8px; margin-top: auto; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th { background: #f9fafb; font-weight: 600; }
+        
+        .badge {
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: white;
+        }
+        .badge-present { background: var(--success); }
+        .badge-absent { background: var(--danger); }
+        .badge-late { background: var(--warning); }
+
+        .empty-state { text-align: center; color: #9ca3af; padding: 20px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>📋 Smart Attendance</h1>
+        <p>Track and manage attendance easily</p>
+    </header>
+
+    <div class="container">
+        <!-- Add Student Section -->
+        <div class="card">
+            <h2>1. Manage Students / Employees</h2>
+            <div class="form-row">
+                <input type="text" id="studentName" placeholder="Full Name">
+                <input type="text" id="studentId" placeholder="ID Number (e.g., EMP001)">
+                <button class="btn-primary" onclick="addStudent()">Add Person</button>
+            </div>
+            <div id="studentRoster" style="font-size: 0.9rem; color: #6b7280;"></div>
+        </div>
+
+        <!-- Take Attendance Section -->
+        <div class="card">
+            <h2>2. Take Attendance</h2>
+            <div class="form-row">
+                <label style="display: flex; align-items: center; font-weight: 600;">Date:</label>
+                <input type="date" id="attendanceDate">
+            </div>
+            <div id="attendanceArea" class="student-list">
+                <div class="empty-state">Add people in Step 1 to begin taking attendance.</div>
+            </div>
+        </div>
+
+        <!-- Records Section -->
+        <div class="card">
+            <h2>3. Attendance Records</h2>
+            <div id="recordsArea">
+                <div class="empty-state">No records yet.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Data Management ---
+        let students = JSON.parse(localStorage.getItem('students')) || [];
+        let records = JSON.parse(localStorage.getItem('records')) || [];
+
+        // Set default date to today
+        document.getElementById('attendanceDate').valueAsDate = new Date();
+        document.getElementById('attendanceDate').addEventListener('change', renderAttendanceArea);
+
+        // --- Core Functions ---
+        function saveData() {
+            localStorage.setItem('students', JSON.stringify(students));
+            localStorage.setItem('records', JSON.stringify(records));
+        }
+
+        function addStudent() {
+            const name = document.getElementById('studentName').value.trim();
+            const id = document.getElementById('studentId').value.trim();
+
+            if (!name || !id) {
+                alert('Please enter both a Name and an ID.');
+                return;
+            }
+
+            if (students.some(s => s.id === id)) {
+                alert('This ID already exists!');
+                return;
+            }
+
+            students.push({ name, id });
+            saveData();
+            
+            // Clear inputs
+            document.getElementById('studentName').value = '';
+            document.getElementById('studentId').value = '';
+            
+            renderAll();
+        }
+
+        function removeStudent(id) {
+            if(confirm('Are you sure you want to remove this person?')) {
+                students = students.filter(s => s.id !== id);
+                records = records.filter(r => r.studentId !== id);
+                saveData();
+                renderAll();
+            }
+        }
+
+        function markAttendance(studentId, status) {
+            const date = document.getElementById('attendanceDate').value;
+            
+            // Remove existing record for this student on this date
+            records = records.filter(r => !(r.studentId === studentId && r.date === date));
+            
+            // Add new record
+            records.push({ date, studentId, status });
+            saveData();
+            renderAttendanceArea();
+            renderRecords();
+        }
+
+        // --- Rendering Functions ---
+        function renderRoster() {
+            const rosterDiv = document.getElementById('studentRoster');
+            if (students.length === 0) {
+                rosterDiv.innerHTML = '<em>No one added yet.</em>';
+                return;
+            }
+            rosterDiv.innerHTML = '<strong>Current Roster:</strong> ' + 
+                students.map(s => `<span style="margin-right:15px;">${s.name} (${s.id}) <a href="#" onclick="removeStudent('${s.id}'); return false;" style="color:red;">[x]</a></span>`).join('');
+        }
+
+        function renderAttendanceArea() {
+            const area = document.getElementById('attendanceArea');
+            const date = document.getElementById('attendanceDate').value;
+
+            if (students.length === 0) {
+                area.innerHTML = '<div class="empty-state">Add people in Step 1 to begin taking attendance.</div>';
+                return;
+            }
+
+            area.innerHTML = students.map(student => {
+                const record = records.find(r => r.studentId === student.id && r.date === date);
+                let statusClass = '';
+                let statusText = 'Not Marked';
+
+                if (record) {
+                    statusClass = `marked-${record.status.toLowerCase()}`;
+                    statusText = record.status;
+                }
+
+                return `
+                    <div class="student-card ${statusClass}">
+                        <div>
+                            <div class="student-info">${student.name}</div>
+                            <div class="student-id">ID: ${student.id} | Status: <strong>${statusText}</strong></div>
+                        </div>
+                        <div class="action-buttons">
+                            <button class="btn-success btn-sm" onclick="markAttendance('${student.id}', 'Present')">Present</button>
+                            <button class="btn-danger btn-sm" onclick="markAttendance('${student.id}', 'Absent')">Absent</button>
+                            <button class="btn-warning btn-sm" onclick="markAttendance('${student.id}', 'Late')">Late</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderRecords() {
+            const area = document.getElementById('recordsArea');
+            if (records.length === 0) {
+                area.innerHTML = '<div class="empty-state">No records yet.</div>';
+                return;
+            }
+
+            // Sort records by date descending
+            const sortedRecords = [...records].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Name</th>
+                            <th>ID</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            sortedRecords.forEach(record => {
+                const student = students.find(s => s.id === record.studentId);
+                const name = student ? student.name : 'Unknown (Deleted)';
+                const badgeClass = `badge-${record.status.toLowerCase()}`;
+                
+                tableHTML += `
+                    <tr>
+                        <td>${record.date}</td>
+                        <td>${name}</td>
+                        <td>${record.studentId}</td>
+                        <td><span class="badge ${badgeClass}">${record.status}</span></td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `</tbody></table>`;
+            area.innerHTML = tableHTML;
+        }
+
+        function renderAll() {
+            renderRoster();
+            renderAttendanceArea();
+            renderRecords();
+        }
+
+        // Initial Render
+        renderAll();
+    </script>
+</body>
+</html>
